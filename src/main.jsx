@@ -98,19 +98,24 @@ const games = [
     image:
       "https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80",
   },
-  {
-    id: "pupi-world-cup-2026",
-    title: "Pupi World Cup 2026",
-    status: "in-corso",
-    category: "Mondiale",
-    season: "2026",
-    format: "Torneo",
-    cost: "25 crediti",
-    url: "https://pulipin426.github.io/pupi-world-cup-2026/",
-    summary: "La base mondiale per seguire il torneo 2026 nel formato Pupi.",
-    image:
-      "https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1200&q=80",
-  },
+ {
+  id: "pupi-world-cup-2026",
+  title: "Pupi World Cup 2026",
+  status: "terminato",
+  category: "Mondiale",
+  season: "2026",
+  format: "Torneo",
+  cost: "25 crediti",
+  podium: [
+    { position: 1, name: "ChallengerGX", detail: "Winner" },
+    { position: 2, name: "AtleticottoB", detail: "2° posto" },
+    { position: 3, name: "Magicbox", detail: "3° posto" },
+  ],
+  url: "https://pulipin426.github.io/pupi-world-cup-2026/",
+  summary: "Edizione 2026 conclusa. Vittoria finale di ChallengerGX.",
+  image:
+    "https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1200&q=80",
+},
   {
     id: "mondiale-ottavi",
     title: "Mondiale dagli ottavi",
@@ -372,11 +377,18 @@ function SerieA1X2App({ onBack }) {
       return {};
     }
   });
+const currentMatches = fixtures.filter(
+  (match) => match.matchday === selectedMatchday
+);
 
-  const currentMatches = fixtures.filter((match) => match.matchday === selectedMatchday);
-  const ranking = leaderboard.length ? leaderboard : buildSerieA1x2Ranking(predictions, playerName, fixtures);
-  const savedCount = Object.values(predictions).filter(Boolean).length;
-  const maxScore = fixtures.length;
+const displayName = user?.name || playerName;
+
+const ranking = leaderboard.length
+  ? leaderboard
+  : buildSerieA1x2Ranking(predictions, displayName, fixtures);
+
+const savedCount = Object.values(predictions).filter(Boolean).length;
+const maxScore = fixtures.length;
 
   useEffect(() => {
     let ignore = false;
@@ -459,22 +471,25 @@ function SerieA1X2App({ onBack }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("serieA1x2Token");
-    setUser(null);
-    setPredictions({});
-    setStatusMessage("Logout effettuato.");
+const logout = () => {
+  localStorage.removeItem("serieA1x2Token");
+  localStorage.removeItem("serieA1x2Player");
+  setUser(null);
+  setPredictions({});
+  setStatusMessage("Logout effettuato.");
   };
 
   const save = () => {
     localStorage.setItem("serieA1x2Player", playerName.trim() || "Mio utente");
     localStorage.setItem("serieA1x2Predictions", JSON.stringify(predictions));
+    setStatusMessage("Dati salvati in locale.");
   };
 
   const reset = () => {
-    localStorage.removeItem("serieA1x2Predictions");
-    setPredictions({});
-  };
+  localStorage.removeItem("serieA1x2Predictions");
+  setPredictions({});
+  setStatusMessage("Pronostici resettati.");
+};
 
   return (
     <main className="one-x-two">
@@ -494,6 +509,11 @@ function SerieA1X2App({ onBack }) {
 
       <section className="one-x-two-grid">
         <aside className="game-control">
+        {user && (
+  <div className="status-note">
+    👤 Connesso come <strong>{user.name}</strong>
+  </div>
+)}
           <label>
             Nome giocatore
             <input disabled={Boolean(user)} value={playerName} onChange={(event) => setPlayerName(event.target.value)} />
