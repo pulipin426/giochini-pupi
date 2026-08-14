@@ -366,8 +366,8 @@ function SerieA1X2App({ onBack }) {
   const [pin, setPin] = useState("");
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem("serieA1x2AdminToken") || "");
   const [adminData, setAdminData] = useState(null);
+  const [pendingResults, setPendingResults] = useState({});
   const [user, setUser] = useState(null);
-  const [authMode, setAuthMode] = useState("register");
   const [serverAvailable, setServerAvailable] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [fixtures, setFixtures] = useState(serieA1x2Matches);
@@ -394,6 +394,16 @@ const savedCount = Object.values(predictions).filter(Boolean).length;
 const maxScore = fixtures.length;
 
   useEffect(() => {
+    setPendingResults((current) => {
+      const next = { ...current };
+      currentMatches.forEach((match) => {
+        next[match.id] = match.officialResult || next[match.id] || "";
+      });
+      return next;
+    });
+  }, [selectedMatchday, fixtures]);
+
+  useEffect(() => {
     let ignore = false;
 
     async function boot() {
@@ -407,31 +417,18 @@ const maxScore = fixtures.length;
         setServerAvailable(true);
 
         const token = localStorage.getItem("serieA1x2Token");
-        if (!token) return;
-
-        try {
+        if (token) {
           const mePayload = await apiRequest("/api/me");
           const predictionPayload = await apiRequest("/api/predictions");
           if (ignore) return;
           setUser(mePayload.user);
           setPlayerName(mePayload.user.name);
           setPredictions(predictionPayload.predictions);
-        } catch (authError) {
-          // Un token vecchio/non valido non deve disabilitare Login/Iscriviti.
-          localStorage.removeItem("serieA1x2Token");
-          if (!ignore) {
-            setUser(null);
-            setStatusMessage(
-              authError.message === "Non autenticato."
-                ? "Sessione scaduta. Puoi effettuare di nuovo il login."
-                : "Sessione non valida. Puoi effettuare di nuovo il login.",
-            );
-          }
         }
-      } catch (error) {
+      } catch {
         if (!ignore) {
           setServerAvailable(false);
-          setStatusMessage(`Server non disponibile: ${error.message}`);
+          setStatusMessage("Modalita locale: avvia il server per login, privacy e classifica reale.");
         }
       }
     }
@@ -479,7 +476,6 @@ const maxScore = fixtures.length;
       localStorage.setItem("serieA1x2Token", payload.token);
       localStorage.setItem("serieA1x2Player", payload.user.name);
       setUser(payload.user);
-      setAuthMode("register");
       setPin("");
       setStatusMessage(mode === "register" ? `✓ Iscrizione completata. Sei connesso come ${payload.user.name}.` : `✓ Login effettuato. Bentornato, ${payload.user.name}.`);
       const predictionPayload = await apiRequest("/api/predictions");
@@ -550,18 +546,35 @@ const logout = () => {
     }
   };
 
-  const saveResult = async (matchId, officialResult) => {
+  const setPendingResult = (matchId, officialResult) => {
+    setPendingResults((current) => ({ ...current, [matchId]: officialResult }));
+  };
+
+  const saveResults = async () => {
+    const entries = currentMatches
+      .map((match) => ({ matchId: match.id, officialResult: pendingResults[match.id] || "" }))
+      .filter((item) => item.officialResult);
+
+    if (!entries.length) {
+      setStatusMessage("Seleziona almeno un risultato prima di salvare.");
+      return;
+    }
+
     try {
-      await adminRequest(`/api/admin/results/${matchId}`, {
-        method: "PUT",
-        body: JSON.stringify({ officialResult }),
-      });
+      await Promise.all(
+        entries.map(({ matchId, officialResult }) =>
+          adminRequest(`/api/admin/results/${matchId}`, {
+            method: "PUT",
+            body: JSON.stringify({ officialResult }),
+          }),
+        ),
+      );
       await loadAdmin();
       const fixturesPayload = await apiRequest("/api/fixtures");
       const leaderboardPayload = await apiRequest("/api/leaderboard");
       setFixtures(fixturesPayload.fixtures);
       setLeaderboard(leaderboardPayload.leaderboard);
-      setStatusMessage("✓ Risultato salvato.");
+      setStatusMessage(`✓ Risultati G${selectedMatchday} salvati. Classifica aggiornata.`);
     } catch (error) {
       setStatusMessage(error.message);
     }
@@ -625,28 +638,24 @@ const logout = () => {
             </div>
           ) : (
             <div className="auth-box">
-              <strong>{authMode === "register" ? "Prima volta? Iscriviti" : "Hai già un account? Accedi"}</strong>
-              <p className="auth-help">
-                {authMode === "register"
-                  ? "Crea il tuo account per salvare i pronostici e partecipare alla classifica."
-                  : "Inserisci nome e Password per recuperare i tuoi pronostici."}
-              </p>
+              <strong>Accedi al gioco</strong>
+              <p className="auth-help">Usa il tuo nome e la Password per partecipare e salvare i pronostici.</p>
               <div className="app-actions auth-actions">
                 <button
                   className="save-action"
                   disabled={!serverAvailable}
-                  onClick={() => authenticate(authMode)}
+                  onClick={() => authenticate("login")}
                   type="button"
                 >
-                  {authMode === "register" ? "ISCRIVITI" : "LOGIN"}
+                  LOGIN
                 </button>
                 <button
                   className="reset-action"
                   disabled={!serverAvailable}
-                  onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}
+                  onClick={() => authenticate("register")}
                   type="button"
                 >
-                  {authMode === "register" ? "Ho già un account → Login" : "Sono nuovo → Iscriviti"}
+                  ISCRIVITI
                 </button>
               </div>
             </div>
@@ -801,13 +810,13 @@ const logout = () => {
             </div>
 
             <div className="admin-results">
-              <h3>Risultati</h3>
+              <h3>Risultati G{selectedMatchday}</h3>
               {currentMatches.map((match) => (
                 <div className="admin-result-row" key={match.id}>
                   <span>{match.homeTeam} - {match.awayTeam}</span>
                   <select
-                    value={match.officialResult || ""}
-                    onChange={(event) => event.target.value && saveResult(match.id, event.target.value)}
+                    value={pendingResults[match.id] || ""}
+                    onChange={(event) => setPendingResult(match.id, event.target.value)}
                   >
                     <option value="">—</option>
                     <option value="1">1</option>
@@ -816,6 +825,9 @@ const logout = () => {
                   </select>
                 </div>
               ))}
+              <button className="save-action" onClick={saveResults} type="button">
+                SALVA RISULTATI G{selectedMatchday}
+              </button>
             </div>
 
             <div className="admin-history">
