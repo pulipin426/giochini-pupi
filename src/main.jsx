@@ -7,8 +7,6 @@ import {
   ExternalLink,
   History,
   Lock,
-  RotateCcw,
-  Save,
   Trophy,
 } from "lucide-react";
 import { serieA1x2Matches } from "./serieA1x2Calendar";
@@ -384,11 +382,7 @@ const currentMatches = fixtures.filter(
   (match) => match.matchday === selectedMatchday
 );
 
-const displayName = user?.name || playerName;
-
-const ranking = leaderboard.length
-  ? leaderboard
-  : buildSerieA1x2Ranking(predictions, displayName, fixtures);
+const ranking = leaderboard;
 
 const savedCount = Object.values(predictions).filter(Boolean).length;
 const maxScore = fixtures.length;
@@ -418,17 +412,23 @@ const maxScore = fixtures.length;
 
         const token = localStorage.getItem("serieA1x2Token");
         if (token) {
-          const mePayload = await apiRequest("/api/me");
-          const predictionPayload = await apiRequest("/api/predictions");
-          if (ignore) return;
-          setUser(mePayload.user);
-          setPlayerName(mePayload.user.name);
-          setPredictions(predictionPayload.predictions);
+          try {
+            const mePayload = await apiRequest("/api/me");
+            const predictionPayload = await apiRequest("/api/predictions");
+            if (ignore) return;
+            setUser(mePayload.user);
+            setPlayerName(mePayload.user.name);
+            setPredictions(predictionPayload.predictions);
+          } catch (error) {
+            localStorage.removeItem("serieA1x2Token");
+            localStorage.removeItem("serieA1x2Player");
+            if (!ignore && error.message !== "Non autenticato.") setStatusMessage(error.message);
+          }
         }
-      } catch {
+      } catch (error) {
         if (!ignore) {
           setServerAvailable(false);
-          setStatusMessage("Modalita locale: avvia il server per login, privacy e classifica reale.");
+          setStatusMessage(error.message || "Server non disponibile.");
         }
       }
     }
@@ -441,16 +441,12 @@ const maxScore = fixtures.length;
 
   const setPick = async (matchId, pick) => {
     const match = fixtures.find((item) => item.id === matchId);
-    if (match?.locked) {
-      setStatusMessage("Cutoff superata: questa partita e bloccata.");
+    if (!user) {
+      setStatusMessage("Registrati o fai login per inserire i pronostici.");
       return;
     }
-
-    setPredictions((current) => ({ ...current, [matchId]: pick }));
-    localStorage.setItem("serieA1x2Predictions", JSON.stringify({ ...predictions, [matchId]: pick }));
-
-    if (!serverAvailable || !user) {
-      setStatusMessage(`✓ Pronostico salvato solo in questo dispositivo: ${match.homeTeam} - ${match.awayTeam} → ${pick}`);
+    if (match?.locked) {
+      setStatusMessage("Cutoff superata: questa partita e bloccata.");
       return;
     }
 
@@ -459,6 +455,7 @@ const maxScore = fixtures.length;
         method: "PUT",
         body: JSON.stringify({ pick }),
       });
+      setPredictions((current) => ({ ...current, [matchId]: pick }));
       const leaderboardPayload = await apiRequest("/api/leaderboard");
       setLeaderboard(leaderboardPayload.leaderboard);
       setStatusMessage(`✓ Pronostico salvato sul server: ${match.homeTeam} - ${match.awayTeam} → ${pick}`);
@@ -493,17 +490,6 @@ const logout = () => {
   setStatusMessage("Logout effettuato.");
   };
 
-  const save = () => {
-    localStorage.setItem("serieA1x2Player", playerName.trim() || "Mio utente");
-    localStorage.setItem("serieA1x2Predictions", JSON.stringify(predictions));
-    setStatusMessage("Dati salvati in locale.");
-  };
-
-  const reset = () => {
-  localStorage.removeItem("serieA1x2Predictions");
-  setPredictions({});
-  setStatusMessage("Pronostici resettati.");
-};
 
   const adminRequest = async (path, options = {}) => {
     const response = await fetch(path, {
@@ -684,16 +670,7 @@ const logout = () => {
 
           {statusMessage && user && <div className="status-note">{statusMessage}</div>}
 
-          <div className="app-actions">
-            <button className="save-action" onClick={save} type="button">
-              <Save size={17} />
-              Salva locale
-            </button>
-            <button className="reset-action" onClick={reset} type="button">
-              <RotateCcw size={17} />
-              Reset
-            </button>
-          </div>
+          {user && <div className="status-note">I pronostici vengono salvati automaticamente sul server.</div>}
 
           <div className="mini-stats">
             <Stat icon={<CircleDot size={18} />} value={savedCount} label="pronostici" />
@@ -732,7 +709,7 @@ const logout = () => {
                   {["1", "X", "2"].map((pick) => (
                     <button
                       className={predictions[match.id] === pick ? "active" : ""}
-                      disabled={match.locked}
+                      disabled={!user || match.locked}
                       key={pick}
                       onClick={() => setPick(match.id, pick)}
                       type="button"
@@ -753,17 +730,21 @@ const logout = () => {
               <h2>Classifica MVP</h2>
             </div>
           </div>
-          <ol className="ranking-list">
-            {ranking.map((row, index) => (
-              <li key={row.name}>
-                <span>{index + 1}</span>
-                <strong>{row.name}</strong>
-                <small>
-                  {row.points} pt · {row.submitted ?? savedCount} pron.
-                </small>
-              </li>
-            ))}
-          </ol>
+          {ranking.length ? (
+            <ol className="ranking-list">
+              {ranking.map((row, index) => (
+                <li key={row.userId || row.name}>
+                  <span>{index + 1}</span>
+                  <strong>{row.name}</strong>
+                  <small>
+                    {row.points} pt · {row.submitted ?? 0} pron.
+                  </small>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="status-note">Nessun giocatore registrato al momento.</div>
+          )}
         </aside>
       </section>
 
@@ -847,15 +828,6 @@ const logout = () => {
   );
 }
 
-function buildSerieA1x2Ranking(localPredictions, playerName, fixtures) {
-  const rows = [];
-  const localPoints = fixtures.reduce((total, match) => {
-    return total + (match.officialResult && localPredictions[match.id] === match.officialResult ? 1 : 0);
-  }, 0);
-
-  rows.push({ name: playerName.trim() || "Mio utente", points: localPoints, submitted: Object.keys(localPredictions).length });
-  return rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
-}
 
 function formatCutoff(match) {
   const value = match.cutoffAt || match.utcDate || match.date;
