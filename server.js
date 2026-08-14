@@ -20,7 +20,9 @@ function makeInitialDb() {
     users: [],
     sessions: [],
     predictions: [],
+    predictionHistory: [],
     results: [],
+    cutoffs: {},
     fixtures: [],
   };
 }
@@ -91,28 +93,31 @@ function publicUser(user) {
 }
 
 function activeFixtures(db) {
-  return db.fixtures?.length ? db.fixtures : serieA1x2Matches;
+  // Il calendario del gioco resta quello scritto in serieA1x2Calendar.js.
+  // Football-Data non sostituisce più nomi, ID o ordine delle partite.
+  return serieA1x2Matches;
 }
 
-function getMatchdayCutoff(match, fixtures) {
-  const matchdayMatches = fixtures.filter((item) => item.matchday === match.matchday && item.utcDate);
-  if (!matchdayMatches.length) return null;
-  return matchdayMatches
-    .map((item) => new Date(item.utcDate).getTime())
-    .sort((left, right) => left - right)[0];
+function getManualCutoff(match, db) {
+  const value = db.cutoffs?.[String(match.matchday)];
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function getMatchdayCutoff(match, db) {
+  return getManualCutoff(match, db);
 }
 
 function isLocked(match, db) {
-  const hasResult = db.results.some((item) => item.matchId === match.id);
-  if (hasResult) return true;
-  const cutoff = getMatchdayCutoff(match, activeFixtures(db));
+  const cutoff = getMatchdayCutoff(match, db);
   if (!cutoff) return false;
   return Date.now() >= cutoff;
 }
 
 function fixtureWithResult(match, db) {
   const result = db.results.find((item) => item.matchId === match.id);
-  const cutoff = getMatchdayCutoff(match, activeFixtures(db));
+  const cutoff = getMatchdayCutoff(match, db);
   return {
     ...match,
     cutoffAt: cutoff ? new Date(cutoff).toISOString() : null,
@@ -208,11 +213,11 @@ async function handleApi(req, res, pathname) {
     }
 
     if (req.method === "POST" && pathname === "/api/auth/register") {
-      const { name, pin } = await parseBody(req);
+      const { name, password, pin } = await parseBody(req);
       const cleanName = String(name || "").trim();
-      const cleanPin = String(pin || "").trim();
-      if (cleanName.length < 2 || cleanPin.length < 4) {
-        return send(res, 400, { error: "Nome minimo 2 caratteri, PIN minimo 4 cifre." });
+      const cleanPassword = String(password ?? pin ?? "").trim();
+      if (cleanName.length < 2 || cleanPassword.length < 4) {
+        return send(res, 400, { error: "Nome minimo 2 caratteri, password minimo 4 caratteri." });
       }
       if (db.users.some((user) => user.name.toLowerCase() === cleanName.toLowerCase())) {
         return send(res, 409, { error: "Nome gia registrato. Fai login." });
@@ -221,7 +226,7 @@ async function handleApi(req, res, pathname) {
       const user = {
         id: randomBytes(12).toString("hex"),
         name: cleanName,
-        pinHash: hashPin(cleanPin),
+        passwordHash: hashPin(cleanPassword),
         createdAt: new Date().toISOString(),
       };
       const token = randomBytes(32).toString("hex");
@@ -232,10 +237,12 @@ async function handleApi(req, res, pathname) {
     }
 
     if (req.method === "POST" && pathname === "/api/auth/login") {
-      const { name, pin } = await parseBody(req);
+      const { name, password, pin } = await parseBody(req);
+      const cleanPassword = String(password ?? pin ?? "").trim();
       const user = db.users.find((item) => item.name.toLowerCase() === String(name || "").trim().toLowerCase());
-      if (!user || !verifyPin(String(pin || "").trim(), user.pinHash)) {
-        return send(res, 401, { error: "Nome o PIN non validi." });
+      const storedPassword = user?.passwordHash || user?.pinHash;
+      if (!user || !storedPassword || !verifyPin(cleanPassword, storedPassword)) {
+        return send(res, 401, { error: "Nome o password non validi." });
       }
       const token = randomBytes(32).toString("hex");
       db.sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
@@ -252,7 +259,7 @@ async function handleApi(req, res, pathname) {
     if (req.method === "GET" && pathname === "/api/fixtures") {
       return send(res, 200, {
         fixtures: activeFixtures(db).map((match) => fixtureWithResult(match, db)),
-        source: db.fixtures?.length ? "football-data" : "static",
+        source: "static",
       });
     }
 
@@ -280,12 +287,20 @@ async function handleApi(req, res, pathname) {
       }
 
       const existing = db.predictions.find((item) => item.userId === user.id && item.matchId === matchId);
+      const now = new Date().toISOString();
       if (existing) {
         existing.pick = pick;
-        existing.updatedAt = new Date().toISOString();
+        existing.updatedAt = now;
       } else {
-        db.predictions.push({ userId: user.id, matchId, pick, updatedAt: new Date().toISOString() });
+        db.predictions.push({ userId: user.id, matchId, pick, updatedAt: now });
       }
+      db.predictionHistory.push({
+        id: randomBytes(12).toString("hex"),
+        userId: user.id,
+        matchId,
+        pick,
+        createdAt: now,
+      });
       writeDb(db);
       return send(res, 200, { ok: true });
     }
@@ -314,6 +329,55 @@ async function handleApi(req, res, pathname) {
       }
       writeDb(db);
       return send(res, 200, { ok: true, leaderboard: leaderboard(db) });
+    }
+
+    if (req.method === "GET" && pathname === "/api/admin/overview") {
+      const header = req.headers.authorization || "";
+      const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+      if (!adminToken || token !== adminToken) return send(res, 403, { error: "Admin token non valido." });
+
+      const fixtures = activeFixtures(db).map((match) => fixtureWithResult(match, db));
+      const history = (db.predictionHistory || []).map((item) => {
+        const user = db.users.find((candidate) => candidate.id === item.userId);
+        const match = fixtures.find((candidate) => candidate.id === item.matchId);
+        return {
+          ...item,
+          userName: user?.name || "Utente eliminato",
+          match: match ? `${match.homeTeam} - ${match.awayTeam}` : item.matchId,
+        };
+      }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      return send(res, 200, {
+        ok: true,
+        cutoffs: db.cutoffs || {},
+        users: db.users.map(publicUser),
+        fixtures,
+        history,
+      });
+    }
+
+    if (req.method === "PUT" && pathname.startsWith("/api/admin/cutoffs/")) {
+      const header = req.headers.authorization || "";
+      const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+      if (!adminToken || token !== adminToken) return send(res, 403, { error: "Admin token non valido." });
+
+      const matchday = Number(decodeURIComponent(pathname.replace("/api/admin/cutoffs/", "")));
+      if (!Number.isInteger(matchday) || matchday < 1 || matchday > 38) {
+        return send(res, 400, { error: "Giornata non valida." });
+      }
+
+      const { cutoffAt } = await parseBody(req);
+      if (!cutoffAt) {
+        delete db.cutoffs[matchday];
+      } else {
+        const parsed = new Date(cutoffAt);
+        if (!Number.isFinite(parsed.getTime())) {
+          return send(res, 400, { error: "Cutoff non valido." });
+        }
+        db.cutoffs[matchday] = parsed.toISOString();
+      }
+      writeDb(db);
+      return send(res, 200, { ok: true, matchday, cutoffAt: db.cutoffs[matchday] || null });
     }
 
     if (req.method === "POST" && pathname === "/api/admin/sync-football-data") {
@@ -380,7 +444,5 @@ async function runFootballDataSync() {
 }
 
 function scheduleFootballDataSync() {
-  if (!footballDataToken) return;
-  runFootballDataSync();
-  setInterval(runFootballDataSync, footballDataSyncIntervalMs);
+  // Disattivato: calendario, cutoff e risultati sono gestiti manualmente.
 }

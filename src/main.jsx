@@ -364,6 +364,8 @@ function SerieA1X2App({ onBack }) {
   const [selectedMatchday, setSelectedMatchday] = useState(matchdays[0]);
   const [playerName, setPlayerName] = useState(() => localStorage.getItem("serieA1x2Player") || "Mio utente");
   const [pin, setPin] = useState("");
+  const [adminToken, setAdminToken] = useState(() => localStorage.getItem("serieA1x2AdminToken") || "");
+  const [adminData, setAdminData] = useState(null);
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("register");
   const [serverAvailable, setServerAvailable] = useState(false);
@@ -459,7 +461,7 @@ const maxScore = fixtures.length;
     try {
       const payload = await apiRequest(`/api/auth/${mode}`, {
         method: "POST",
-        body: JSON.stringify({ name: playerName, pin }),
+        body: JSON.stringify({ name: playerName, password: pin }),
       });
       localStorage.setItem("serieA1x2Token", payload.token);
       localStorage.setItem("serieA1x2Player", payload.user.name);
@@ -494,6 +496,64 @@ const logout = () => {
   setStatusMessage("Pronostici resettati.");
 };
 
+  const adminRequest = async (path, options = {}) => {
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${adminToken}`,
+        ...(options.headers || {}),
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Errore admin");
+    return payload;
+  };
+
+  const loadAdmin = async () => {
+    try {
+      const payload = await adminRequest("/api/admin/overview");
+      localStorage.setItem("serieA1x2AdminToken", adminToken);
+      setAdminData(payload);
+      setStatusMessage("✓ Accesso super admin attivo.");
+    } catch (error) {
+      setAdminData(null);
+      setStatusMessage(error.message);
+    }
+  };
+
+  const saveCutoff = async (matchday, value) => {
+    try {
+      await adminRequest(`/api/admin/cutoffs/${matchday}`, {
+        method: "PUT",
+        body: JSON.stringify({ cutoffAt: value ? new Date(value).toISOString() : null }),
+      });
+      await loadAdmin();
+      const fixturesPayload = await apiRequest("/api/fixtures");
+      setFixtures(fixturesPayload.fixtures);
+      setStatusMessage(`✓ Cutoff G${matchday} salvato.`);
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  };
+
+  const saveResult = async (matchId, officialResult) => {
+    try {
+      await adminRequest(`/api/admin/results/${matchId}`, {
+        method: "PUT",
+        body: JSON.stringify({ officialResult }),
+      });
+      await loadAdmin();
+      const fixturesPayload = await apiRequest("/api/fixtures");
+      const leaderboardPayload = await apiRequest("/api/leaderboard");
+      setFixtures(fixturesPayload.fixtures);
+      setLeaderboard(leaderboardPayload.leaderboard);
+      setStatusMessage("✓ Risultato salvato.");
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
+  };
+
   return (
     <main className="one-x-two">
       <header className="app-top">
@@ -523,16 +583,22 @@ const logout = () => {
           </label>
 
           <label>
-            PIN
+            Password
             <input
               disabled={Boolean(user) || !serverAvailable}
               minLength={4}
               onChange={(event) => setPin(event.target.value)}
-              placeholder="minimo 4 cifre"
+              placeholder="minimo 4 caratteri"
               type="password"
               value={pin}
             />
           </label>
+
+          {!user && statusMessage && (
+            <div className="status-note auth-error" role="alert">
+              {statusMessage}
+            </div>
+          )}
 
           {user ? (
             <div className="auth-box logged-in">
@@ -550,7 +616,7 @@ const logout = () => {
               <p className="auth-help">
                 {authMode === "register"
                   ? "Crea il tuo account per salvare i pronostici e partecipare alla classifica."
-                  : "Inserisci nome e PIN per recuperare i tuoi pronostici."}
+                  : "Inserisci nome e Password per recuperare i tuoi pronostici."}
               </p>
               <div className="app-actions auth-actions">
                 <button
@@ -591,10 +657,10 @@ const logout = () => {
             {user
               ? `I tuoi segni sono privati. Sei connesso come ${user.name}.`
               : "Prima iscriviti o fai login: così i pronostici vengono salvati sul server e restano privati."}{" "}
-            Cutoff: prima partita della giornata.
+            Cutoff: impostato manualmente dall'amministratore.
           </div>
 
-          {statusMessage && <div className="status-note">{statusMessage}</div>}
+          {statusMessage && user && <div className="status-note">{statusMessage}</div>}
 
           <div className="app-actions">
             <button className="save-action" onClick={save} type="button">
@@ -612,7 +678,7 @@ const logout = () => {
             <Stat icon={<Trophy size={18} />} value={maxScore} label="partite" />
           </div>
 
-          <div className="status-note">Fonte calendario: {fixtureSource === "football-data" ? "football-data" : "statica"}</div>
+          <div className="status-note">Calendario: statico · cutoff manuale</div>
         </aside>
 
         <section className="match-panel">
@@ -677,6 +743,80 @@ const logout = () => {
             ))}
           </ol>
         </aside>
+      </section>
+
+      <section className="admin-panel">
+        <div className="match-panel-head">
+          <div>
+            <p className="eyebrow">Super Admin</p>
+            <h2>Gestione risultati e cutoff</h2>
+          </div>
+          <span>{adminData ? "🟢 autorizzato" : "protetto"}</span>
+        </div>
+
+        {!adminData ? (
+          <div className="admin-login">
+            <p>Solo il titolare del gioco deve inserire il token ADMIN_TOKEN di Render.</p>
+            <input
+              type="password"
+              value={adminToken}
+              onChange={(event) => setAdminToken(event.target.value)}
+              placeholder="ADMIN_TOKEN"
+            />
+            <button className="save-action" onClick={loadAdmin} type="button">
+              Accedi come Super Admin
+            </button>
+          </div>
+        ) : (
+          <div className="admin-tools">
+            <div className="admin-cutoffs">
+              <h3>Cutoff giornate</h3>
+              {matchdays.map((matchday) => {
+                const saved = adminData.cutoffs?.[matchday];
+                const localValue = saved ? new Date(saved).toISOString().slice(0, 16) : "";
+                return (
+                  <label key={matchday}>
+                    G{matchday}
+                    <input
+                      type="datetime-local"
+                      defaultValue={localValue}
+                      onBlur={(event) => saveCutoff(matchday, event.target.value)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="admin-results">
+              <h3>Risultati</h3>
+              {currentMatches.map((match) => (
+                <div className="admin-result-row" key={match.id}>
+                  <span>{match.homeTeam} - {match.awayTeam}</span>
+                  <select
+                    value={match.officialResult || ""}
+                    onChange={(event) => event.target.value && saveResult(match.id, event.target.value)}
+                  >
+                    <option value="">—</option>
+                    <option value="1">1</option>
+                    <option value="X">X</option>
+                    <option value="2">2</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            <div className="admin-history">
+              <h3>Ultime giocate salvate</h3>
+              {adminData.history?.slice(0, 30).map((item) => (
+                <div className="admin-history-row" key={item.id}>
+                  <strong>{item.userName}</strong>
+                  <span>{item.match} → {item.pick}</span>
+                  <small>{new Date(item.createdAt).toLocaleString("it-IT")}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );
