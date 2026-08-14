@@ -407,18 +407,31 @@ const maxScore = fixtures.length;
         setServerAvailable(true);
 
         const token = localStorage.getItem("serieA1x2Token");
-        if (token) {
+        if (!token) return;
+
+        try {
           const mePayload = await apiRequest("/api/me");
           const predictionPayload = await apiRequest("/api/predictions");
           if (ignore) return;
           setUser(mePayload.user);
           setPlayerName(mePayload.user.name);
           setPredictions(predictionPayload.predictions);
+        } catch (authError) {
+          // Un token vecchio/non valido non deve disabilitare Login/Iscriviti.
+          localStorage.removeItem("serieA1x2Token");
+          if (!ignore) {
+            setUser(null);
+            setStatusMessage(
+              authError.message === "Non autenticato."
+                ? "Sessione scaduta. Puoi effettuare di nuovo il login."
+                : "Sessione non valida. Puoi effettuare di nuovo il login.",
+            );
+          }
         }
-      } catch {
+      } catch (error) {
         if (!ignore) {
           setServerAvailable(false);
-          setStatusMessage("Modalita locale: avvia il server per login, privacy e classifica reale.");
+          setStatusMessage(`Server non disponibile: ${error.message}`);
         }
       }
     }
