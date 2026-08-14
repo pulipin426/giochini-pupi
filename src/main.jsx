@@ -365,6 +365,7 @@ function SerieA1X2App({ onBack }) {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem("serieA1x2Player") || "Mio utente");
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
+  const [authMode, setAuthMode] = useState("register");
   const [serverAvailable, setServerAvailable] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [fixtures, setFixtures] = useState(serieA1x2Matches);
@@ -437,7 +438,7 @@ const maxScore = fixtures.length;
     localStorage.setItem("serieA1x2Predictions", JSON.stringify({ ...predictions, [matchId]: pick }));
 
     if (!serverAvailable || !user) {
-      setStatusMessage("Pronostico salvato solo in locale.");
+      setStatusMessage(`✓ Pronostico salvato solo in questo dispositivo: ${match.homeTeam} - ${match.awayTeam} → ${pick}`);
       return;
     }
 
@@ -448,7 +449,7 @@ const maxScore = fixtures.length;
       });
       const leaderboardPayload = await apiRequest("/api/leaderboard");
       setLeaderboard(leaderboardPayload.leaderboard);
-      setStatusMessage("Pronostico salvato.");
+      setStatusMessage(`✓ Pronostico salvato sul server: ${match.homeTeam} - ${match.awayTeam} → ${pick}`);
     } catch (error) {
       setStatusMessage(error.message);
     }
@@ -463,7 +464,9 @@ const maxScore = fixtures.length;
       localStorage.setItem("serieA1x2Token", payload.token);
       localStorage.setItem("serieA1x2Player", payload.user.name);
       setUser(payload.user);
-      setStatusMessage(mode === "register" ? "Utente creato." : "Login effettuato.");
+      setAuthMode("register");
+      setPin("");
+      setStatusMessage(mode === "register" ? `✓ Iscrizione completata. Sei connesso come ${payload.user.name}.` : `✓ Login effettuato. Bentornato, ${payload.user.name}.`);
       const predictionPayload = await apiRequest("/api/predictions");
       setPredictions(predictionPayload.predictions);
     } catch (error) {
@@ -531,22 +534,44 @@ const logout = () => {
             />
           </label>
 
-          <div className="app-actions auth-actions">
-            {user ? (
+          {user ? (
+            <div className="auth-box logged-in">
+              <div className="status-note">
+                🟢 <strong>Connesso come {user.name}</strong>
+              </div>
+              <p className="auth-help">I tuoi pronostici sono privati e vengono salvati sul server.</p>
               <button className="reset-action" onClick={logout} type="button">
                 Logout
               </button>
-            ) : (
-              <>
-                <button className="save-action" disabled={!serverAvailable} onClick={() => authenticate("login")} type="button">
-                  Login
+            </div>
+          ) : (
+            <div className="auth-box">
+              <strong>{authMode === "register" ? "Prima volta? Iscriviti" : "Hai già un account? Accedi"}</strong>
+              <p className="auth-help">
+                {authMode === "register"
+                  ? "Crea il tuo account per salvare i pronostici e partecipare alla classifica."
+                  : "Inserisci nome e PIN per recuperare i tuoi pronostici."}
+              </p>
+              <div className="app-actions auth-actions">
+                <button
+                  className="save-action"
+                  disabled={!serverAvailable}
+                  onClick={() => authenticate(authMode)}
+                  type="button"
+                >
+                  {authMode === "register" ? "ISCRIVITI" : "LOGIN"}
                 </button>
-                <button className="reset-action" disabled={!serverAvailable} onClick={() => authenticate("register")} type="button">
-                  Iscriviti
+                <button
+                  className="reset-action"
+                  disabled={!serverAvailable}
+                  onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}
+                  type="button"
+                >
+                  {authMode === "register" ? "Ho già un account → Login" : "Sono nuovo → Iscriviti"}
                 </button>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
 
           <div className="matchday-tabs" aria-label="Seleziona giornata">
             {matchdays.map((matchday) => (
@@ -564,8 +589,8 @@ const logout = () => {
           <div className="privacy-note">
             <Lock size={18} />
             {user
-              ? `Accesso come ${user.name}: vedi solo i tuoi segni.`
-              : "Accedi per salvare pronostici privati sul server."}{" "}
+              ? `I tuoi segni sono privati. Sei connesso come ${user.name}.`
+              : "Prima iscriviti o fai login: così i pronostici vengono salvati sul server e restano privati."}{" "}
             Cutoff: prima partita della giornata.
           </div>
 
@@ -595,6 +620,7 @@ const logout = () => {
             <div>
               <p className="eyebrow">Giornata {selectedMatchday}</p>
               <h2>Schedina 1X2</h2>
+              <p className="cutoff-banner">🔒 Pronostici aperti fino al cutoff della giornata</p>
             </div>
             <span>{currentMatches.length} partite</span>
           </div>
