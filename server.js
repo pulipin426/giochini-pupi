@@ -95,14 +95,14 @@ function parseBody(req) {
 
 async function getUserById(id) {
   if (!id) return null;
-  const rows = await supabaseRequest(`users?id=eq.${encodeURIComponent(id)}&select=id,name,pin_hash,password_hash,created_at&limit=1`);
+  const rows = await supabaseRequest(`users?id=eq.${encodeURIComponent(id)}&select=id,name,pin_hash,created_at&limit=1`);
   return rows?.[0] || null;
 }
 
 async function getUserByName(name) {
   const clean = String(name || "").trim();
   if (!clean) return null;
-  const rows = await supabaseRequest(`users?name=eq.${encodeURIComponent(clean)}&select=id,name,pin_hash,password_hash,created_at&limit=1`);
+  const rows = await supabaseRequest(`users?name=eq.${encodeURIComponent(clean)}&select=id,name,pin_hash,created_at&limit=1`);
   return rows?.[0] || null;
 }
 
@@ -258,7 +258,7 @@ async function handleApi(req, res, pathname) {
       const cleanPassword = String(password ?? pin ?? "").trim();
       const user = await getUserByName(cleanName);
 
-      const storedPassword = user?.password_hash || user?.pin_hash;
+      const storedPassword = user?.pin_hash;
       if (!user || !storedPassword || !verifyPin(cleanPassword, storedPassword)) {
         return send(res, 401, { error: "Nome o password non validi." });
       }
