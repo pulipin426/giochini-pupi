@@ -366,7 +366,7 @@ function SerieA1X2App({ onBack }) {
   const [adminData, setAdminData] = useState(null);
   const [pendingResults, setPendingResults] = useState({});
   const [user, setUser] = useState(null);
-  const [serverAvailable, setServerAvailable] = useState(false);
+  const [serverAvailable, setServerAvailable] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
   const [fixtures, setFixtures] = useState(serieA1x2Matches);
   const [fixtureSource, setFixtureSource] = useState("static");
@@ -401,34 +401,45 @@ const maxScore = fixtures.length;
     let ignore = false;
 
     async function boot() {
+      // L'interfaccia resta subito utilizzabile: Password e Login/Iscriviti
+      // non vengono bloccati in attesa del caricamento del calendario.
       try {
-        const fixturesPayload = await apiRequest("/api/fixtures");
-        const leaderboardPayload = await apiRequest("/api/leaderboard");
-        if (ignore) return;
-        setFixtures(fixturesPayload.fixtures);
-        setFixtureSource(fixturesPayload.source);
-        setLeaderboard(leaderboardPayload.leaderboard);
-        setServerAvailable(true);
-
-        const token = localStorage.getItem("serieA1x2Token");
-        if (token) {
-          try {
-            const mePayload = await apiRequest("/api/me");
-            const predictionPayload = await apiRequest("/api/predictions");
-            if (ignore) return;
-            setUser(mePayload.user);
-            setPlayerName(mePayload.user.name);
-            setPredictions(predictionPayload.predictions);
-          } catch (error) {
-            localStorage.removeItem("serieA1x2Token");
-            localStorage.removeItem("serieA1x2Player");
-            if (!ignore && error.message !== "Non autenticato.") setStatusMessage(error.message);
-          }
-        }
+        await apiRequest("/api/health");
+        if (!ignore) setServerAvailable(true);
       } catch (error) {
         if (!ignore) {
           setServerAvailable(false);
           setStatusMessage(error.message || "Server non disponibile.");
+        }
+        return;
+      }
+
+      try {
+        const [fixturesPayload, leaderboardPayload] = await Promise.all([
+          apiRequest("/api/fixtures"),
+          apiRequest("/api/leaderboard"),
+        ]);
+        if (ignore) return;
+        setFixtures(fixturesPayload.fixtures);
+        setFixtureSource(fixturesPayload.source);
+        setLeaderboard(leaderboardPayload.leaderboard);
+      } catch (error) {
+        if (!ignore) setStatusMessage(error.message || "Impossibile caricare i dati del gioco.");
+      }
+
+      const token = localStorage.getItem("serieA1x2Token");
+      if (token) {
+        try {
+          const mePayload = await apiRequest("/api/me");
+          const predictionPayload = await apiRequest("/api/predictions");
+          if (ignore) return;
+          setUser(mePayload.user);
+          setPlayerName(mePayload.user.name);
+          setPredictions(predictionPayload.predictions);
+        } catch (error) {
+          localStorage.removeItem("serieA1x2Token");
+          localStorage.removeItem("serieA1x2Player");
+          if (!ignore && error.message !== "Non autenticato.") setStatusMessage(error.message);
         }
       }
     }
