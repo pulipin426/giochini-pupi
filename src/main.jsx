@@ -366,7 +366,8 @@ function SerieA1X2App({ onBack }) {
   const [adminData, setAdminData] = useState(null);
   const [pendingResults, setPendingResults] = useState({});
   const [user, setUser] = useState(null);
-  const [serverAvailable, setServerAvailable] = useState(true);
+  const [serverAvailable, setServerAvailable] = useState(false);
+  const [serverChecking, setServerChecking] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
   const [fixtures, setFixtures] = useState(serieA1x2Matches);
   const [fixtureSource, setFixtureSource] = useState("static");
@@ -405,10 +406,14 @@ const maxScore = fixtures.length;
       // non vengono bloccati in attesa del caricamento del calendario.
       try {
         await apiRequest("/api/health");
-        if (!ignore) setServerAvailable(true);
+        if (!ignore) {
+          setServerAvailable(true);
+          setServerChecking(false);
+        }
       } catch (error) {
         if (!ignore) {
           setServerAvailable(false);
+          setServerChecking(false);
           setStatusMessage(error.message || "Server non disponibile.");
         }
         return;
@@ -604,6 +609,13 @@ const logout = () => {
             Nome giocatore
             <input disabled={Boolean(user)} value={playerName} onChange={(event) => setPlayerName(event.target.value)} />
           </label>
+
+          {serverChecking && !user && (
+            <div className="status-note" role="status" aria-live="polite">
+              <span aria-hidden="true" style={{ display: "inline-block", marginRight: 8, animation: "spin 1s linear infinite" }}>⟳</span>
+              Connessione al server…
+            </div>
+          )}
 
           <label>
             Password
