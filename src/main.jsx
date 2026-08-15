@@ -583,7 +583,7 @@ const logout = () => {
   };
 
   return (
-    <main className="one-x-two">
+    <main className="one-x-two" style={{ background: "#eef2f7", minHeight: "100vh" }}>
       <header className="app-top">
         <button className="back-button" onClick={onBack} type="button">
           Torna all'hub
@@ -591,10 +591,6 @@ const logout = () => {
         <div>
           <p className="eyebrow">Serie A 1X2</p>
           <h1>Pronostici nascosti, risultati automatici, ranking pulito.</h1>
-          <p>
-            MVP production-ready basato sul calendario Serie A 2026-27. Login leggero, pronostici privati,
-            classifica pubblica senza mostrare le giocate degli altri.
-          </p>
         </div>
       </header>
 
@@ -750,7 +746,7 @@ const logout = () => {
           <div className="match-panel-head compact">
             <div>
               <p className="eyebrow">Ranking</p>
-              <h2>Classifica MVP</h2>
+              <h2>Classifica</h2>
             </div>
           </div>
           {ranking.length ? (
