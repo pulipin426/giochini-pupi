@@ -583,7 +583,7 @@ const logout = () => {
   };
 
   return (
-    <main className="one-x-two" style={{ background: "#eef2f7", minHeight: "100vh" }}>
+    <main className="one-x-two" style={{ background: "#dfe6ee", minHeight: "100vh" }}>
       <header className="app-top">
         <button className="back-button" onClick={onBack} type="button">
           Torna all'hub
@@ -750,17 +750,36 @@ const logout = () => {
             </div>
           </div>
           {ranking.length ? (
-            <ol className="ranking-list">
-              {ranking.map((row, index) => (
-                <li key={row.userId || row.name}>
-                  <span>{index + 1}</span>
-                  <strong>{row.name}</strong>
-                  <small>
-                    {row.points} pt · {row.submitted ?? 0} pron.
-                  </small>
-                </li>
+            <div className="ranking-columns" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+              {[
+                { key: "points", title: "Classifica", subtitle: "G1–G38" },
+                { key: "firstHalfPoints", title: "Girone d'andata", subtitle: "G1–G19" },
+                { key: "secondHalfPoints", title: "Girone di ritorno", subtitle: "G20–G38" },
+              ].map((section) => (
+                <section className="ranking-subpanel" key={section.key} style={{ background: "rgba(255,255,255,0.72)", borderRadius: 14, padding: 10 }}>
+                  <div className="match-panel-head compact">
+                    <div>
+                      <h3>{section.title}</h3>
+                      <small>{section.subtitle}</small>
+                    </div>
+                  </div>
+                  <ol className="ranking-list">
+                    {[...ranking]
+                      .sort((a, b) =>
+                        (b[section.key] ?? 0) - (a[section.key] ?? 0) ||
+                        a.name.localeCompare(b.name)
+                      )
+                      .map((row, index) => (
+                        <li key={`${section.key}-${row.userId || row.name}`}>
+                          <span>{index + 1}</span>
+                          <strong>{row.name}</strong>
+                          <small>{row[section.key] ?? 0} pt</small>
+                        </li>
+                      ))}
+                  </ol>
+                </section>
               ))}
-            </ol>
+            </div>
           ) : (
             <div className="status-note">Nessun giocatore registrato al momento.</div>
           )}
@@ -836,7 +855,18 @@ const logout = () => {
                 <div className="admin-history-row" key={item.id}>
                   <strong>{item.userName}</strong>
                   <span>{item.match} → {item.pick}</span>
-                  <small>{new Date(item.createdAt).toLocaleString("it-IT")}</small>
+                  <small>
+                      Inserito il{" "}
+                      {item.createdAt
+                        ? new Date(item.createdAt).toLocaleString("it-IT", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "data non disponibile"}
+                    </small>
                 </div>
               ))}
             </div>

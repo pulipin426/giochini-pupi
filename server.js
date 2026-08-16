@@ -172,25 +172,41 @@ async function getLeaderboard() {
   const resultMap = new Map((results || []).map((row) => [row.match_id, row.official_result]));
   const played = (results || []).length;
 
+  const matchdayMap = new Map(serieA1x2Matches.map((match) => [match.id, Number(match.matchday)]));
+
   return (users || [])
     .map((user) => {
       const userPredictions = (predictions || []).filter((p) => p.user_id === user.id);
-      const points = userPredictions.reduce(
-        (total, prediction) =>
-          total + (resultMap.get(prediction.match_id) === prediction.pick ? 1 : 0),
-        0,
-      );
+
+      let points = 0;
+      let firstHalfPoints = 0;
+      let secondHalfPoints = 0;
+
+      for (const prediction of userPredictions) {
+        if (resultMap.get(prediction.match_id) !== prediction.pick) continue;
+
+        const matchday = matchdayMap.get(prediction.match_id);
+        points += 1;
+
+        if (matchday >= 1 && matchday <= 19) {
+          firstHalfPoints += 1;
+        } else if (matchday >= 20 && matchday <= 38) {
+          secondHalfPoints += 1;
+        }
+      }
+
       return {
         userId: user.id,
         name: user.name,
         points,
+        firstHalfPoints,
+        secondHalfPoints,
         played,
         submitted: userPredictions.length,
       };
     })
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 }
-
 async function requireAdmin(req) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -368,6 +384,7 @@ async function handleApi(req, res, pathname) {
         const match = fixtureMap.get(item.match_id);
         return {
           ...item,
+          createdAt: item.created_at,
           userName: userMap.get(item.user_id) || "Utente eliminato",
           match: match ? `${match.homeTeam} - ${match.awayTeam}` : item.match_id,
         };
