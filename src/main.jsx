@@ -583,7 +583,93 @@ const logout = () => {
   };
 
   return (
-    <main className="one-x-two" style={{ background: "#dfe6ee", minHeight: "100vh" }}>
+    <main className="one-x-two ranking-ui-v2" style={{ background: "#dfe6ee", minHeight: "100vh" }}>
+      <style>{`
+        .ranking-ui-v2 .one-x-two-grid {
+          grid-template-columns: minmax(250px, 0.9fr) minmax(0, 2.2fr) minmax(520px, 1.8fr);
+          align-items: start;
+        }
+        .ranking-ui-v2 .ranking-panel {
+          min-width: 0;
+        }
+        .ranking-ui-v2 .ranking-columns {
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          gap: 12px;
+          align-items: start;
+        }
+        .ranking-ui-v2 .ranking-subpanel {
+          min-width: 0;
+          overflow: hidden;
+        }
+        .ranking-ui-v2 .ranking-subpanel .match-panel-head {
+          min-width: 0;
+          margin-bottom: 8px;
+        }
+        .ranking-ui-v2 .ranking-subpanel h3 {
+          margin: 0;
+          font-size: 1.05rem;
+          line-height: 1.15;
+          white-space: normal;
+        }
+        .ranking-ui-v2 .ranking-subpanel small {
+          display: block;
+          margin-top: 5px;
+        }
+        .ranking-ui-v2 .ranking-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 6px;
+        }
+        .ranking-ui-v2 .ranking-list li {
+          display: grid;
+          grid-template-columns: 28px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          padding: 8px 9px;
+          border-radius: 10px;
+        }
+        .ranking-ui-v2 .ranking-list li strong {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .ranking-ui-v2 .ranking-list li small {
+          margin: 0;
+          white-space: nowrap;
+          text-align: right;
+        }
+        @media (max-width: 1250px) {
+          .ranking-ui-v2 .one-x-two-grid {
+            grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.8fr) minmax(430px, 1.5fr);
+          }
+          .ranking-ui-v2 .ranking-columns {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 900px) {
+          .ranking-ui-v2 .one-x-two-grid {
+            grid-template-columns: 1fr;
+          }
+          .ranking-ui-v2 .ranking-columns {
+            grid-template-columns: 1fr !important;
+          }
+          .ranking-ui-v2 .ranking-subpanel {
+            padding: 12px !important;
+          }
+          .ranking-ui-v2 .ranking-subpanel h3 {
+            font-size: 1.15rem;
+          }
+          .ranking-ui-v2 .ranking-list li {
+            grid-template-columns: 32px minmax(0, 1fr) auto;
+            padding: 10px 12px;
+          }
+        }
+      `}</style>
       <header className="app-top">
         <button className="back-button" onClick={onBack} type="button">
           Torna all'hub
@@ -750,7 +836,7 @@ const logout = () => {
             </div>
           </div>
           {ranking.length ? (
-            <div className="ranking-columns" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            <div className="ranking-columns">
               {[
                 { key: "points", title: "Classifica", subtitle: "G1–G38" },
                 { key: "firstHalfPoints", title: "Girone d'andata", subtitle: "G1–G19" },
