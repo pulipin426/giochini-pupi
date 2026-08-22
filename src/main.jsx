@@ -842,10 +842,10 @@ const logout = () => {
                 { key: "firstHalfPoints", title: "Girone d'andata", subtitle: "G1–G19" },
                 { key: "secondHalfPoints", title: "Girone di ritorno", subtitle: "G20–G38" },
               ].map((section) => (
-                <section className="ranking-subpanel" key={section.key} style={{ background: "rgba(255,255,255,0.72)", borderRadius: 14, padding: 10 }}>
+                <section className="ranking-subpanel" key={section.key} style={{ background: "rgba(255,255,255,0.72)", borderRadius: 14, padding: 9 }}>
                   <div className="match-panel-head compact">
                     <div>
-                      <h3>{section.title}</h3>
+                      <h3 style={{ fontSize: 16 }}>{section.title}</h3>
                       <small>{section.subtitle}</small>
                     </div>
                   </div>
@@ -857,9 +857,9 @@ const logout = () => {
                       )
                       .map((row, index) => (
                         <li key={`${section.key}-${row.userId || row.name}`}>
-                          <span>{index + 1}</span>
-                          <strong>{row.name}</strong>
-                          <small>{row[section.key] ?? 0} pt</small>
+                          <span style={{ fontSize: 12 }}>{index + 1}</span>
+                          <strong style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</strong>
+                          <small style={{ fontSize: 12, whiteSpace: "nowrap" }}>{row[section.key] ?? 0} pt</small>
                         </li>
                       ))}
                   </ol>
