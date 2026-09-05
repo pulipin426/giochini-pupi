@@ -862,6 +862,16 @@ const logout = () => {
 
               {revealedPredictions?.players?.length ? (
                 <div className="revealed-pronos-list">
+                  <article className="revealed-player revealed-header">
+                    <strong>Utente</strong>
+                    <div>
+                      {currentMatches.map((match) => (
+                        <span key={`header-${match.id}`} title={`${match.homeTeam} - ${match.awayTeam}`}>
+                          {shortMatchLabel(match)}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
                   {revealedPredictions.players.map((player) => (
                     <article className="revealed-player" key={player.userId}>
                       <strong>{player.userName}</strong>
@@ -1028,6 +1038,17 @@ function formatCutoff(match) {
     month: "2-digit",
     timeZone: "Europe/Rome",
   });
+}
+
+function shortMatchLabel(match) {
+  return `${shortTeam(match.homeTeam)}-${shortTeam(match.awayTeam)}`;
+}
+
+function shortTeam(name) {
+  return String(name || "")
+    .replace(/\s+(FC|CF|1907|1913|Calcio|U\.?S\.?|A\.?C\.?|S\.?S\.?C\.?)$/i, "")
+    .slice(0, 3)
+    .toUpperCase();
 }
 
 function Stat({ icon, value, label }) {
