@@ -772,6 +772,47 @@ h2 {
   gap: 6px;
 }
 
+.revealed-pronos {
+  margin: 16px;
+  padding: 14px;
+  border: 1px solid rgba(24, 33, 29, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.revealed-pronos-list {
+  display: grid;
+  gap: 8px;
+}
+
+.revealed-player {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f7f3ea;
+}
+
+.revealed-player > div {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(24px, 1fr));
+  gap: 5px;
+}
+
+.revealed-player span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border-radius: 7px;
+  background: #18382b;
+  color: #fffaf4;
+  font-size: 0.84rem;
+  font-weight: 950;
+}
+
 .ranking-list {
   display: grid;
   gap: 8px;

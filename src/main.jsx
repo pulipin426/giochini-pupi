@@ -372,6 +372,7 @@ function SerieA1X2App({ onBack }) {
   const [fixtures, setFixtures] = useState(serieA1x2Matches);
   const [fixtureSource, setFixtureSource] = useState("static");
   const [leaderboard, setLeaderboard] = useState([]);
+  const [revealedPredictions, setRevealedPredictions] = useState(null);
   const [predictions, setPredictions] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("serieA1x2Predictions") || "{}");
@@ -387,6 +388,7 @@ const ranking = leaderboard;
 
 const savedCount = Object.values(predictions).filter(Boolean).length;
 const maxScore = fixtures.length;
+const selectedMatchdayLocked = currentMatches.some((match) => match.locked);
 
   useEffect(() => {
     setPendingResults((current) => {
@@ -397,6 +399,27 @@ const maxScore = fixtures.length;
       return next;
     });
   }, [selectedMatchday, fixtures]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadRevealedPredictions() {
+      setRevealedPredictions(null);
+      if (!selectedMatchdayLocked) return;
+
+      try {
+        const payload = await apiRequest(`/api/predictions/revealed/${selectedMatchday}`);
+        if (!ignore) setRevealedPredictions(payload);
+      } catch {
+        if (!ignore) setRevealedPredictions(null);
+      }
+    }
+
+    loadRevealedPredictions();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedMatchday, selectedMatchdayLocked]);
 
   useEffect(() => {
     let ignore = false;
@@ -826,6 +849,37 @@ const logout = () => {
               </article>
             ))}
           </div>
+
+          {selectedMatchdayLocked && (
+            <section className="revealed-pronos">
+              <div className="match-panel-head compact">
+                <div>
+                  <p className="eyebrow">Post cutoff</p>
+                  <h2>Pronostici visibili</h2>
+                </div>
+                <span>{revealedPredictions?.players?.length || 0} utenti</span>
+              </div>
+
+              {revealedPredictions?.players?.length ? (
+                <div className="revealed-pronos-list">
+                  {revealedPredictions.players.map((player) => (
+                    <article className="revealed-player" key={player.userId}>
+                      <strong>{player.userName}</strong>
+                      <div>
+                        {currentMatches.map((match) => (
+                          <span key={`${player.userId}-${match.id}`}>
+                            {player.picks[match.id] || "-"}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="status-note">Nessun pronostico pubblico per questa giornata.</div>
+              )}
+            </section>
+          )}
         </section>
 
         <aside className="ranking-panel">

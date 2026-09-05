@@ -148,6 +148,12 @@ async function isLocked(match) {
   return Date.now() >= cutoff;
 }
 
+async function isMatchdayLocked(matchday) {
+  const cutoff = await getManualCutoff({ matchday });
+  if (!cutoff) return false;
+  return Date.now() >= cutoff;
+}
+
 async function fixtureWithResult(match) {
   const results = await supabaseRequest(
     `results?match_id=eq.${encodeURIComponent(match.id)}&select=official_result,updated_at&limit=1`,
@@ -314,6 +320,49 @@ async function handleApi(req, res, pathname) {
       return send(res, 200, {
         predictions: Object.fromEntries((predictions || []).map((row) => [row.match_id, row.pick])),
       });
+    }
+
+    if (req.method === "GET" && pathname.startsWith("/api/predictions/revealed/")) {
+      const matchday = Number(decodeURIComponent(pathname.replace("/api/predictions/revealed/", "")));
+      if (!Number.isInteger(matchday) || matchday < 1 || matchday > 38) {
+        return send(res, 400, { error: "Giornata non valida." });
+      }
+
+      if (!(await isMatchdayLocked(matchday))) {
+        return send(res, 403, { revealed: false, error: "Pronostici visibili solo dopo cutoff." });
+      }
+
+      const matchIds = activeFixtures()
+        .filter((match) => match.matchday === matchday)
+        .map((match) => match.id);
+
+      const [users, predictions] = await Promise.all([
+        supabaseRequest("users?select=id,name&order=name.asc"),
+        supabaseRequest(
+          `predictions?match_id=in.(${matchIds.join(",")})&select=user_id,match_id,pick,updated_at&order=updated_at.asc`,
+        ),
+      ]);
+
+      const userMap = new Map((users || []).map((user) => [user.id, user.name]));
+      const players = [];
+
+      for (const prediction of predictions || []) {
+        let player = players.find((item) => item.userId === prediction.user_id);
+        if (!player) {
+          player = {
+            userId: prediction.user_id,
+            userName: userMap.get(prediction.user_id) || "Utente",
+            picks: {},
+            submitted: 0,
+          };
+          players.push(player);
+        }
+        player.picks[prediction.match_id] = prediction.pick;
+        player.submitted += 1;
+      }
+
+      players.sort((a, b) => a.userName.localeCompare(b.userName));
+      return send(res, 200, { revealed: true, matchday, players });
     }
 
     if (req.method === "PUT" && pathname.startsWith("/api/predictions/")) {
